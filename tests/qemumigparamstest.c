@@ -213,6 +213,7 @@ mymain(void)
     DO_TEST("tls");
     DO_TEST("tls-enabled");
     DO_TEST("tls-hostname");
+    DO_TEST("compress-qat");
 
     qemuTestDriverFree(&driver);
 

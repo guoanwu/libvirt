@@ -114,6 +114,7 @@ VIR_ENUM_IMPL(qemuMigrationParam,
               "xbzrle-cache-size",
               "max-postcopy-bandwidth",
               "multifd-channels",
+              "compress-with-qat",
 );
 
 typedef struct _qemuMigrationParamsAlwaysOnItem qemuMigrationParamsAlwaysOnItem;
@@ -222,6 +223,10 @@ static const qemuMigrationParamsTPMapItem qemuMigrationParamsTPMap[] = {
     {.typedParam = VIR_MIGRATE_PARAM_TLS_DESTINATION,
      .param = QEMU_MIGRATION_PARAM_TLS_HOSTNAME,
      .party = QEMU_MIGRATION_SOURCE},
+
+    {.typedParam = VIR_MIGRATE_PARAM_COMPRESSION_MT_QAT,
+     .param = QEMU_MIGRATION_PARAM_COMPRESS_WITH_QAT,
+     .party = QEMU_MIGRATION_SOURCE | QEMU_MIGRATION_DESTINATION},
 };
 
 static const qemuMigrationParamType qemuMigrationParamTypes[] = {
@@ -238,6 +243,7 @@ static const qemuMigrationParamType qemuMigrationParamTypes[] = {
     [QEMU_MIGRATION_PARAM_XBZRLE_CACHE_SIZE] = QEMU_MIGRATION_PARAM_TYPE_ULL,
     [QEMU_MIGRATION_PARAM_MAX_POSTCOPY_BANDWIDTH] = QEMU_MIGRATION_PARAM_TYPE_ULL,
     [QEMU_MIGRATION_PARAM_MULTIFD_CHANNELS] = QEMU_MIGRATION_PARAM_TYPE_INT,
+    [QEMU_MIGRATION_PARAM_COMPRESS_WITH_QAT] = QEMU_MIGRATION_PARAM_TYPE_BOOL,
 };
 G_STATIC_ASSERT(G_N_ELEMENTS(qemuMigrationParamTypes) == QEMU_MIGRATION_PARAM_LAST);
 
@@ -305,6 +311,48 @@ qemuMigrationParamsCheckType(qemuMigrationParam param,
     return 0;
 }
 
+static int
+qemuMigrationParamsGetBoolean(qemuMigrationParams *migParams,
+                              qemuMigrationParam param,
+                              virTypedParameterPtr params,
+                              int nparams,
+                              const char *name)
+{
+    int rc;
+    int value;
+
+    if (qemuMigrationParamsCheckType(param, QEMU_MIGRATION_PARAM_TYPE_BOOL) < 0)
+        return -1;
+
+    if (!params)
+        return 0;
+
+    if ((rc = virTypedParamsGetBoolean(params, nparams, name, &value)) < 0)
+        return -1;
+
+    migParams->params[param].value.b = !!value;
+    migParams->params[param].set = !!rc;
+    return 0;
+}
+
+
+static int
+qemuMigrationParamsSetBoolean(qemuMigrationParams *migParams,
+                              qemuMigrationParam param,
+                              virTypedParameterPtr *params,
+                              int *nparams,
+                              int *maxparams,
+                              const char *name)
+{
+    if (qemuMigrationParamsCheckType(param, QEMU_MIGRATION_PARAM_TYPE_BOOL) < 0)
+        return -1;
+
+    if (!migParams->params[param].set)
+        return 0;
+
+    return virTypedParamsAddBoolean(params, nparams, maxparams, name,
+                                    migParams->params[param].value.b ? 1 : 0);
+}
 
 static int
 qemuMigrationParamsGetTPInt(qemuMigrationParams *migParams,
@@ -522,7 +570,8 @@ qemuMigrationParamsSetCompression(virTypedParameterPtr params,
 
     if ((migParams->params[QEMU_MIGRATION_PARAM_COMPRESS_LEVEL].set ||
          migParams->params[QEMU_MIGRATION_PARAM_COMPRESS_THREADS].set ||
-         migParams->params[QEMU_MIGRATION_PARAM_DECOMPRESS_THREADS].set) &&
+         migParams->params[QEMU_MIGRATION_PARAM_DECOMPRESS_THREADS].set||
+         migParams->params[QEMU_MIGRATION_PARAM_COMPRESS_WITH_QAT].set) &&
         !(migParams->compMethods & (1ULL << QEMU_MIGRATION_COMPRESS_MT))) {
         virReportError(VIR_ERR_INVALID_ARG, "%s",
                        _("Turn multithread compression on to tune it"));
@@ -611,6 +660,9 @@ qemuMigrationParamsFromFlags(virTypedParameterPtr params,
             break;
 
         case QEMU_MIGRATION_PARAM_TYPE_BOOL:
+            if (qemuMigrationParamsGetBoolean(migParams, item->param, params,
+                                            nparams, item->typedParam) < 0)
+                return NULL;
             break;
 
         case QEMU_MIGRATION_PARAM_TYPE_STRING:
@@ -687,6 +739,10 @@ qemuMigrationParamsDump(qemuMigrationParams *migParams,
             break;
 
         case QEMU_MIGRATION_PARAM_TYPE_BOOL:
+            if (qemuMigrationParamsSetBoolean(migParams, item->param,
+                                              params, nparams, maxparams,
+                                              item->typedParam) < 0)
+                return -1;
             break;
 
         case QEMU_MIGRATION_PARAM_TYPE_STRING:

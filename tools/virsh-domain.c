@@ -10963,6 +10963,10 @@ static const vshCmdOptDef opts_migrate[] = {
      .type = VSH_OT_INT,
      .help = N_("number of decompression threads for multithread compression")
     },
+    {.name = "comp-mt-qat",
+     .type = VSH_OT_BOOL,
+     .help = N_("compress with qat for multithread compression")
+    },
     {.name = "comp-xbzrle-cache",
      .type = VSH_OT_INT,
      .help = N_("page cache size for xbzrle compression")
@@ -11143,6 +11147,13 @@ doMigrate(void *opaque)
         if (virTypedParamsAddInt(&params, &nparams, &maxparams,
                                  VIR_MIGRATE_PARAM_COMPRESSION_MT_DTHREADS,
                                  intOpt) < 0)
+            goto save_error;
+    }
+
+    if (vshCommandOptBool(cmd, "comp-mt-qat")){
+        if (virTypedParamsAddBoolean(
+                &params, &nparams, &maxparams,
+                VIR_MIGRATE_PARAM_COMPRESSION_MT_QAT, true) < 0)
             goto save_error;
     }
 

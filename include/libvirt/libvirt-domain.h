@@ -1365,7 +1365,18 @@ typedef enum {
  *
  * Since: 6.0.0
  */
+
 # define VIR_MIGRATE_PARAM_TLS_DESTINATION          "tls.destination"
+
+/**
+ * VIR_MIGRATE_PARAM_COMPRESSION_MT_QAT:
+ *
+ * virDomainMigrate* params field: compress with qat for
+ * multithread compression/decompress as VIR_TYPED_PARAM_BOOLEAN.
+ *
+ * Since: 8.5.0
+ */
+# define VIR_MIGRATE_PARAM_COMPRESSION_MT_QAT    "compression.mt.qat"
 
 /* Domain migration. */
 virDomainPtr virDomainMigrate (virDomainPtr domain, virConnectPtr dconn,
